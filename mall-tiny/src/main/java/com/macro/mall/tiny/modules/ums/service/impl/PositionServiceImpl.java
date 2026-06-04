@@ -40,6 +40,9 @@ public class PositionServiceImpl extends ServiceImpl<PositionMapper, Position> i
         Page<Position> page = new Page<>(param.getPageNum(), param.getPageSize());
         LambdaQueryWrapper<Position> wrapper = new LambdaQueryWrapper<>();
         
+        // 只查询未删除的
+        wrapper.eq(Position::getStatus, 0);
+        
         // 年份筛选
         if (param.getYear() != null) {
             wrapper.eq(Position::getYear, param.getYear());
@@ -173,5 +176,43 @@ public class PositionServiceImpl extends ServiceImpl<PositionMapper, Position> i
             }
         }
         return result;
+    }
+
+    @Override
+    public Page<Position> adminPage(Integer pageNum, Integer pageSize, String department, Integer year) {
+        Page<Position> page = new Page<>(pageNum, pageSize);
+        LambdaQueryWrapper<Position> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Position::getStatus, 0);
+        if (StrUtil.isNotBlank(department)) {
+            wrapper.like(Position::getDepartment, department);
+        }
+        if (year != null) {
+            wrapper.eq(Position::getYear, year);
+        }
+        wrapper.orderByDesc(Position::getCreateTime);
+        return page(page, wrapper);
+    }
+
+    @Override
+    public boolean deleteById(Long id) {
+        Position position = new Position();
+        position.setId(id);
+        position.setStatus(1);
+        return updateById(position);
+    }
+
+    @Override
+    public boolean batchDelete(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return false;
+        }
+        List<Position> positions = new ArrayList<>();
+        for (Long id : ids) {
+            Position p = new Position();
+            p.setId(id);
+            p.setStatus(1);
+            positions.add(p);
+        }
+        return updateBatchById(positions);
     }
 }

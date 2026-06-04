@@ -52,6 +52,9 @@ const activeMenu = computed(() => route.path)
 
 const handleLogout = () => {
   logout()
+  localStorage.removeItem('token')
+  localStorage.removeItem('roles')
+  localStorage.removeItem('resources')
   ElMessage.success('已退出登录')
   router.push('/login')
 }
@@ -62,10 +65,16 @@ const loadUserInfo = async () => {
     if (res.data && res.data.username) {
       username.value = res.data.username
     }
+    // 同步资源权限列表到 localStorage
+    if (res.data && res.data.resources) {
+      localStorage.setItem('resources', JSON.stringify(res.data.resources))
+    }
   } catch (error) {
     console.error('获取用户信息失败:', error)
     if (error.response && error.response.status === 401) {
       localStorage.removeItem('token')
+      localStorage.removeItem('roles')
+      localStorage.removeItem('resources')
       router.push('/login')
     }
   }

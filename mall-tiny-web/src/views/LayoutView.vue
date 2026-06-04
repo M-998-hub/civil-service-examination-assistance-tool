@@ -16,6 +16,10 @@
           class="layout-menu"
           router
         >
+          <el-menu-item index="/home">
+            <el-icon><HomeFilled /></el-icon>
+            <span>首页</span>
+          </el-menu-item>
           <el-menu-item index="/archive">
             <el-icon><User /></el-icon>
             <span>个人档案</span>
@@ -32,6 +36,10 @@
             <el-icon><Star /></el-icon>
             <span>我的收藏</span>
           </el-menu-item>
+          <el-menu-item index="/dashboard">
+            <el-icon><DataAnalysis /></el-icon>
+            <span>数据看板</span>
+          </el-menu-item>
         </el-menu>
       </el-aside>
       <el-main class="layout-main">
@@ -45,7 +53,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { User, Document, MagicStick, Star } from '@element-plus/icons-vue'
+import { User, Document, MagicStick, Star, DataAnalysis, HomeFilled } from '@element-plus/icons-vue'
 import { getAdminInfo, logout } from '../api/auth'
 
 const router = useRouter()

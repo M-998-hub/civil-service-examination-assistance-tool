@@ -1,5 +1,6 @@
 package com.macro.mall.tiny.modules.ums.dto;
 
+import com.macro.mall.tiny.modules.ums.strategy.ImportTypeEnum;
 import lombok.Data;
 
 import java.util.Map;
@@ -10,6 +11,11 @@ import java.util.Map;
  */
 @Data
 public class ExecuteImportParam {
+
+    /**
+     * 导入类型
+     */
+    private ImportTypeEnum importType;
 
     /**
      * 会话ID

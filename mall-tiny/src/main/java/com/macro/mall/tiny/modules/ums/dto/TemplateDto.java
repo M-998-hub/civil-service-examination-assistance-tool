@@ -25,4 +25,9 @@ public class TemplateDto {
      * 列映射JSON
      */
     private String columnMapping;
+
+    /**
+     * 导入类型
+     */
+    private String importType;
 }

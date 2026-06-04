@@ -7,17 +7,19 @@ import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
 import com.alibaba.excel.event.AnalysisEventListener;
 import com.alibaba.excel.metadata.data.ReadCellData;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.macro.mall.tiny.modules.ums.dto.*;
 import com.macro.mall.tiny.modules.ums.model.ImportTemplate;
-import com.macro.mall.tiny.modules.ums.model.Position;
 import com.macro.mall.tiny.modules.ums.service.AdminImportService;
 import com.macro.mall.tiny.modules.ums.service.ImportTemplateService;
-import com.macro.mall.tiny.modules.ums.service.PositionService;
+import com.macro.mall.tiny.modules.ums.strategy.ImportStrategy;
+import com.macro.mall.tiny.modules.ums.strategy.ImportTypeEnum;
+import com.macro.mall.tiny.common.api.ResultCode;
+import com.macro.mall.tiny.common.exception.Asserts;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationContext;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,13 +27,12 @@ import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.PostConstruct;
 import java.io.File;
-import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 管理端数据导入服务实现
- * Created by macro on 2026-04-03.
+ * 使用策略模式支持多种导入类型
  */
 @Service
 public class AdminImportServiceImpl implements AdminImportService {
@@ -42,74 +43,57 @@ public class AdminImportServiceImpl implements AdminImportService {
     private String tempPath;
 
     @Autowired
-    private PositionService positionService;
+    private ImportTemplateService templateService;
 
     @Autowired
-    private ImportTemplateService templateService;
+    private ApplicationContext applicationContext;
+
+    /**
+     * 类型 → 策略 的索引Map（通过 ApplicationContext 收集，避免泛型通配符注入问题）
+     */
+    private Map<ImportTypeEnum, ImportStrategy<?>> strategyMap;
 
     /**
      * 会话信息缓存
      */
     private final Map<String, SessionInfo> sessionCache = new ConcurrentHashMap<>();
 
-    /**
-     * 有效的学历要求枚举
-     */
-    private static final Set<String> VALID_EDUCATION = new HashSet<String>() {{
-        add("专科"); add("本科"); add("硕士研究生"); add("博士研究生");
-        add("大专"); add("硕士"); add("博士");
-    }};
-
-    /**
-     * 学历关键词提取配置（按优先级从高到低排序）
-     * 博士 > 硕士 > 本科 > 大专
-     */
-    private static final List<String> EDUCATION_KEYWORDS = new ArrayList<String>() {{
-        add("博士");      // 最高优先级
-        add("硕士");      // 其次
-        add("本科");      // 再次
-        add("大专");      // 最低优先级
-        add("专科");      // 同大专
-    }};
-
-    /**
-     * 有效的政治面貌要求枚举
-     */
-    private static final Set<String> VALID_POLITICAL_STATUS = new HashSet<String>() {{
-        add("不限"); add("中共党员"); add("共青团员"); add("民主党派"); add("群众");
-    }};
-
-    /**
-     * 政治面貌关键词映射配置
-     * key: 标准值
-     * value: 该标准值对应的所有可能关键词（按优先级排序）
-     * 
-     * 优先级规则：优先选择要求更低的（从低到高）
-     * 不限 < 群众 < 共青团员 < 中共党员
-     */
-    private static final Map<String, List<String>> POLITICAL_STATUS_KEYWORDS = new LinkedHashMap<String, List<String>>() {{
-        // 不限（最低要求，优先匹配）
-        put("不限", new ArrayList<String>() {{
-            add("不限"); add("无限制"); add("无"); add("不限制");
-        }});
-        // 群众（较低要求）
-        put("群众", new ArrayList<String>() {{
-            add("群众");
-        }});
-        // 团员（较高要求）
-        put("共青团员", new ArrayList<String>() {{
-            add("共青团员"); add("团员");
-        }});
-        // 党员（最高要求，最后匹配）
-        put("中共党员", new ArrayList<String>() {{
-            add("中共党员"); add("中共正式党员"); add("中共预备党员"); add("党员");
-        }});
-    }};
-
     @PostConstruct
+    @SuppressWarnings("rawtypes")
     public void init() {
-        // 创建临时目录
         FileUtil.mkdir(tempPath);
+        // 使用 ApplicationContext 收集所有 ImportStrategy bean，避免 List<ImportStrategy<?>> 泛型注入问题
+        Map<String, ImportStrategy> beans = applicationContext.getBeansOfType(ImportStrategy.class);
+        strategyMap = new HashMap<>();
+        for (ImportStrategy<?> strategy : beans.values()) {
+            strategyMap.put(strategy.getImportType(), strategy);
+        }
+        LOGGER.info("已注册导入策略: {}", strategyMap.keySet());
+    }
+
+    /**
+     * 获取指定类型的策略
+     */
+    public ImportStrategy<?> getStrategy(ImportTypeEnum importType) {
+        ImportStrategy<?> strategy = strategyMap.get(importType);
+        if (strategy == null) {
+            Asserts.fail("不支持的导入类型: " + importType);
+        }
+        return strategy;
+    }
+
+    /**
+     * 获取所有支持的导入类型
+     */
+    public List<Map<String, String>> getSupportedTypes() {
+        List<Map<String, String>> types = new ArrayList<>();
+        for (ImportTypeEnum type : ImportTypeEnum.values()) {
+            Map<String, String> item = new HashMap<>();
+            item.put("code", type.getCode());
+            item.put("label", type.getLabel());
+            types.add(item);
+        }
+        return types;
     }
 
     @Override
@@ -134,7 +118,6 @@ public class AdminImportServiceImpl implements AdminImportService {
         EasyExcel.read(tempFile, new AnalysisEventListener<Map<Integer, String>>() {
             @Override
             public void invokeHead(Map<Integer, ReadCellData<?>> headMap, AnalysisContext context) {
-                // 读取表头
                 for (int i = 0; i < headMap.size(); i++) {
                     ReadCellData<?> cellData = headMap.get(i);
                     columns.add(cellData.getStringValue());
@@ -176,38 +159,47 @@ public class AdminImportServiceImpl implements AdminImportService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public ExecuteImportResult executeImport(ExecuteImportParam param, Long userId) throws Exception {
+        // 确定导入类型，默认为 POSITION（兼容旧接口）
+        ImportTypeEnum importType = param.getImportType() != null
+                ? param.getImportType()
+                : ImportTypeEnum.POSITION;
+
+        ImportStrategy<?> strategy = getStrategy(importType);
+        return doImport(strategy, param, userId);
+    }
+
+    /**
+     * 通用导入流程模板
+     */
+    @SuppressWarnings("unchecked")
+    private <T> ExecuteImportResult doImport(ImportStrategy<T> strategy, ExecuteImportParam param, Long userId) throws Exception {
         // 获取会话信息
         SessionInfo sessionInfo = sessionCache.get(param.getSessionId());
         if (sessionInfo == null) {
-            throw new RuntimeException("会话不存在或已过期，请重新上传文件");
+            Asserts.fail(ResultCode.IMPORT_SESSION_EXPIRED);
         }
 
         File tempFile = new File(sessionInfo.getFilePath());
         if (!tempFile.exists()) {
-            throw new RuntimeException("临时文件不存在，请重新上传");
+            Asserts.fail(ResultCode.IMPORT_FILE_INVALID);
         }
 
         ExecuteImportResult result = new ExecuteImportResult();
         Map<String, Object> mapping = param.getMapping();
-        
-        // 解析年份（优先使用专门的year字段，否则从mapping中获取）
-        Integer yearValue = null;
-        if (StrUtil.isNotBlank(param.getYear())) {
-            try {
-                yearValue = Integer.parseInt(param.getYear().trim());
-            } catch (NumberFormatException e) {
-                throw new RuntimeException("年份格式不正确: " + param.getYear());
-            }
-        }
-        final Integer finalYearValue = yearValue;
 
-        // 获取已存在的岗位用于去重
-        Set<String> existingKeys = getExistingPositionKeys();
+        // 构建额外参数
+        Map<String, Object> extraParams = new HashMap<>();
+        if (StrUtil.isNotBlank(param.getYear())) {
+            extraParams.put("year", param.getYear().trim());
+        }
+
+        // 获取已存在数据的唯一键用于去重
+        Set<String> existingKeys = strategy.getExistingKeys(extraParams);
         Set<String> sessionKeys = new HashSet<>();
 
         // 批量读取并导入
-        List<Position> batchList = new ArrayList<>();
-        final int[] currentRow = {1}; // 从第2行开始（第1行是表头）
+        List<T> batchList = new ArrayList<>();
+        final int[] currentRow = {1};
 
         EasyExcel.read(tempFile, new AnalysisEventListener<Map<Integer, String>>() {
             @Override
@@ -215,11 +207,11 @@ public class AdminImportServiceImpl implements AdminImportService {
                 currentRow[0]++;
                 String rowData = buildRowData(data, mapping);
 
-                // 构建Position对象
-                Position position = buildPosition(data, mapping, finalYearValue);
+                // 构建实体
+                T entity = strategy.buildEntity(data, mapping, extraParams);
 
-                // 校验数据
-                String validateMsg = validatePosition(position, currentRow[0]);
+                // 校验
+                String validateMsg = strategy.validate(entity, currentRow[0]);
                 if (validateMsg != null) {
                     result.addFailDetail(currentRow[0], rowData, validateMsg);
                     result.setFailCount(result.getFailCount() + 1);
@@ -227,18 +219,18 @@ public class AdminImportServiceImpl implements AdminImportService {
                 }
 
                 // 去重检查
-                String key = position.getYear() + "_" + position.getDepartment() + "_" + position.getPositionName();
+                String key = strategy.getDuplicateKey(entity);
                 if (existingKeys.contains(key) || sessionKeys.contains(key)) {
                     result.setSkipCount(result.getSkipCount() + 1);
                     return;
                 }
 
                 sessionKeys.add(key);
-                batchList.add(position);
+                batchList.add(entity);
 
                 // 批量插入
                 if (batchList.size() >= 1000) {
-                    positionService.saveBatch(batchList);
+                    strategy.saveBatch(batchList);
                     result.setSuccessCount(result.getSuccessCount() + batchList.size());
                     batchList.clear();
                 }
@@ -246,9 +238,8 @@ public class AdminImportServiceImpl implements AdminImportService {
 
             @Override
             public void doAfterAllAnalysed(AnalysisContext context) {
-                // 保存剩余数据
                 if (!batchList.isEmpty()) {
-                    positionService.saveBatch(batchList);
+                    strategy.saveBatch(batchList);
                     result.setSuccessCount(result.getSuccessCount() + batchList.size());
                 }
             }
@@ -266,189 +257,6 @@ public class AdminImportServiceImpl implements AdminImportService {
     }
 
     /**
-     * 构建Position对象
-     */
-    private Position buildPosition(Map<Integer, String> data, Map<String, Object> mapping, Integer yearValue) {
-        Position position = new Position();
-
-        if (mapping.containsKey("department")) {
-            position.setDepartment(getValue(data, getMappingIndex(mapping.get("department"))));
-        }
-        if (mapping.containsKey("positionName")) {
-            position.setPositionName(getValue(data, getMappingIndex(mapping.get("positionName"))));
-        }
-        if (mapping.containsKey("majorRequired")) {
-            position.setMajorRequired(getValue(data, getMappingIndex(mapping.get("majorRequired"))));
-        }
-        if (mapping.containsKey("educationRequired")) {
-            String edu = getValue(data, getMappingIndex(mapping.get("educationRequired")));
-            if (StrUtil.isNotBlank(edu)) {
-                position.setEducationRequired(parseEducation(edu.trim()));
-            }
-        }
-        if (mapping.containsKey("politicalStatusRequired")) {
-            String political = getValue(data, getMappingIndex(mapping.get("politicalStatusRequired")));
-            if (StrUtil.isNotBlank(political)) {
-                position.setPoliticalStatusRequired(parsePoliticalStatus(political.trim()));
-            }
-        }
-        if (mapping.containsKey("isFreshOnly")) {
-            String fresh = getValue(data, getMappingIndex(mapping.get("isFreshOnly")));
-            position.setIsFreshOnly("1".equals(fresh) || "是".equals(fresh) || "true".equalsIgnoreCase(fresh));
-        }
-        if (mapping.containsKey("recruitmentNumber")) {
-            String num = getValue(data, getMappingIndex(mapping.get("recruitmentNumber")));
-            if (StrUtil.isNotBlank(num)) {
-                try {
-                    position.setRecruitmentNumber(Integer.parseInt(num.trim()));
-                } catch (NumberFormatException e) {
-                    position.setRecruitmentNumber(1);
-                }
-            } else {
-                position.setRecruitmentNumber(1);
-            }
-        } else {
-            position.setRecruitmentNumber(1);
-        }
-        
-        // 年份优先使用参数传入的值
-        if (yearValue != null) {
-            position.setYear(yearValue);
-        }
-
-        return position;
-    }
-
-    /**
-     * 从mapping值中获取列索引
-     */
-    private Integer getMappingIndex(Object value) {
-        if (value == null) {
-            return null;
-        }
-        if (value instanceof Integer) {
-            return (Integer) value;
-        }
-        if (value instanceof Number) {
-            return ((Number) value).intValue();
-        }
-        try {
-            return Integer.parseInt(value.toString());
-        } catch (NumberFormatException e) {
-            return null;
-        }
-    }
-
-    private String getValue(Map<Integer, String> data, Integer index) {
-        if (index == null || index < 0) {
-            return null;
-        }
-        return data.get(index);
-    }
-
-    /**
-     * 解析政治面貌字段，提取标准值
-     * 按优先级从低到高匹配：不限 < 群众 < 共青团员 < 中共党员
-     * 优先选择要求更低的（让更多人可以报考）
-     * 
-     * 示例：
-     * - "中共党员或共青团员" -> "共青团员"（取要求更低的团员）
-     * - "中共党员" -> "中共党员"
-     * - "共青团员或群众" -> "群众"（取要求更低的群众）
-     * - "不限" -> "不限"
-     * - "无限制" -> "不限"
-     * 
-     * @param politicalStr Excel中的政治面貌字符串
-     * @return 标准政治面貌值
-     */
-    private String parsePoliticalStatus(String politicalStr) {
-        if (StrUtil.isBlank(politicalStr)) {
-            return null;
-        }
-        
-        // 按优先级顺序匹配关键词（LinkedHashMap保持插入顺序）
-        for (Map.Entry<String, List<String>> entry : POLITICAL_STATUS_KEYWORDS.entrySet()) {
-            String standardValue = entry.getKey();
-            List<String> keywords = entry.getValue();
-            
-            for (String keyword : keywords) {
-                if (politicalStr.contains(keyword)) {
-                    return standardValue;
-                }
-            }
-        }
-        
-        // 如果没有匹配到任何关键词，返回原始值（后续校验会处理）
-        return politicalStr;
-    }
-     /* 按优先级从高到低匹配：博士 > 硕士 > 本科 > 大专/专科
-     * 示例：
-     * - "本科及以上" -> "本科"
-     * - "仅限硕士" -> "硕士"
-     * - "本科或硕士研究生" -> "本科"
-     * - "大专及以上" -> "大专"
-     * 
-     * @param educationStr Excel中的学历字符串
-     * @return 标准学历值
-     */
-    private String parseEducation(String educationStr) {
-        if (StrUtil.isBlank(educationStr)) {
-            return null;
-        }
-        
-        // 按优先级顺序匹配关键词
-        for (String keyword : EDUCATION_KEYWORDS) {
-            if (educationStr.contains(keyword)) {
-                // 将"专科"统一转换为"大专"
-                if ("专科".equals(keyword)) {
-                    return "大专";
-                }
-                return keyword;
-            }
-        }
-        
-        // 如果没有匹配到任何关键词，返回原始值（后续校验会处理）
-        return educationStr;
-    }
-
-    /**
-     * 校验Position数据
-     */
-    private String validatePosition(Position position, int rowNum) {
-        // 部门不能为空
-        if (StrUtil.isBlank(position.getDepartment())) {
-            return "部门不能为空";
-        }
-        // 职位名称不能为空
-        if (StrUtil.isBlank(position.getPositionName())) {
-            return "职位名称不能为空";
-        }
-        // 年份不能为空
-        if (position.getYear() == null) {
-            return "年份不能为空或格式不正确";
-        }
-        // 年份范围校验
-        if (position.getYear() < 2000 || position.getYear() > 2100) {
-            return "年份应在2000-2100之间";
-        }
-        // 学历要求校验
-        if (StrUtil.isNotBlank(position.getEducationRequired()) 
-                && !VALID_EDUCATION.contains(position.getEducationRequired())) {
-            return "学历要求值无效，有效值: 专科、本科、硕士研究生、博士研究生、大专、硕士、博士";
-        }
-        // 政治面貌要求校验
-        if (StrUtil.isNotBlank(position.getPoliticalStatusRequired()) 
-                && !VALID_POLITICAL_STATUS.contains(position.getPoliticalStatusRequired())) {
-            return "政治面貌要求值无效，有效值: 不限、中共党员、共青团员、民主党派、群众";
-        }
-        // 招录人数校验
-        if (position.getRecruitmentNumber() != null && position.getRecruitmentNumber() < 1) {
-            return "招录人数必须大于0";
-        }
-        return null;
-    }
-
-    /**
      * 构建行数据字符串
      */
     private String buildRowData(Map<Integer, String> data, Map<String, Object> mapping) {
@@ -461,17 +269,15 @@ public class AdminImportServiceImpl implements AdminImportService {
         return sb.toString();
     }
 
-    /**
-     * 获取已存在的岗位唯一键
-     */
-    private Set<String> getExistingPositionKeys() {
-        Set<String> keys = new HashSet<>();
-        List<Position> allPositions = positionService.list();
-        for (Position position : allPositions) {
-            String key = position.getYear() + "_" + position.getDepartment() + "_" + position.getPositionName();
-            keys.add(key);
+    private Integer getMappingIndex(Object value) {
+        if (value == null) return null;
+        if (value instanceof Integer) return (Integer) value;
+        if (value instanceof Number) return ((Number) value).intValue();
+        try {
+            return Integer.parseInt(value.toString());
+        } catch (NumberFormatException e) {
+            return null;
         }
-        return keys;
     }
 
     /**
@@ -481,6 +287,7 @@ public class AdminImportServiceImpl implements AdminImportService {
         ImportTemplate template = new ImportTemplate();
         template.setTemplateName(param.getTemplateName());
         template.setColumnMapping(JSONUtil.toJsonStr(param.getMapping()));
+        template.setImportType(param.getImportType() != null ? param.getImportType().getCode() : ImportTypeEnum.POSITION.getCode());
         templateService.saveTemplate(template, userId);
     }
 
@@ -490,13 +297,12 @@ public class AdminImportServiceImpl implements AdminImportService {
     @Scheduled(fixedRate = 3600000)
     @Override
     public void cleanExpiredFiles() {
-        long expireTime = System.currentTimeMillis() - 3600000; // 1小时前
+        long expireTime = System.currentTimeMillis() - 3600000;
         Iterator<Map.Entry<String, SessionInfo>> iterator = sessionCache.entrySet().iterator();
         while (iterator.hasNext()) {
             Map.Entry<String, SessionInfo> entry = iterator.next();
             SessionInfo info = entry.getValue();
             if (info.getCreateTime().getTime() < expireTime) {
-                // 删除临时文件
                 FileUtil.del(info.getFilePath());
                 iterator.remove();
                 LOGGER.info("Cleaned expired session: {}", entry.getKey());

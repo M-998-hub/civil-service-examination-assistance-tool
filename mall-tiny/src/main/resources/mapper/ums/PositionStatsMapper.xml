@@ -5,8 +5,9 @@
     <!-- 通用查询映射结果 -->
     <resultMap id="BaseResultMap" type="com.macro.mall.tiny.modules.ums.model.PositionStats">
         <id column="id" property="id" />
-        <result column="position_id" property="positionId" />
         <result column="year" property="year" />
+        <result column="department" property="department" />
+        <result column="position_name" property="positionName" />
         <result column="registration_count" property="registrationCount" />
         <result column="min_entry_score" property="minEntryScore" />
         <result column="max_entry_score" property="maxEntryScore" />

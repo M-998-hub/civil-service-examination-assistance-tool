@@ -32,6 +32,11 @@ public class ImportTemplate implements Serializable {
     private String description;
 
     /**
+     * 导入类型（position / position_stats）
+     */
+    private String importType;
+
+    /**
      * 列映射JSON，格式：{"department":0,"positionName":1,...}
      */
     private String columnMapping;

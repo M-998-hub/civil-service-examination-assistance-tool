@@ -2,13 +2,35 @@
   <div class="import-container">
     <!-- 步骤条 -->
     <el-steps :active="currentStep" align-center class="steps">
+      <el-step title="选择类型" />
       <el-step title="上传文件" />
       <el-step title="配置映射" />
       <el-step title="执行导入" />
     </el-steps>
 
-    <!-- 步骤1: 上传文件 -->
+    <!-- 步骤0: 选择导入类型 -->
     <div v-if="currentStep === 0" class="step-content">
+      <div class="type-selection">
+        <h3>请选择导入数据类型</h3>
+        <el-radio-group v-model="importType" size="large" class="type-radio-group">
+          <el-radio-button
+            v-for="t in importTypes"
+            :key="t.code"
+            :label="t.code"
+          >
+            {{ t.label }}
+          </el-radio-button>
+        </el-radio-group>
+        <div class="step-actions">
+          <el-button type="primary" @click="handleTypeConfirm" :disabled="!importType">
+            下一步
+          </el-button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 步骤1: 上传文件 -->
+    <div v-if="currentStep === 1" class="step-content">
       <el-upload
         ref="uploadRef"
         class="upload-area"
@@ -34,10 +56,14 @@
           开始预览
         </el-button>
       </div>
+
+      <div class="step-actions">
+        <el-button @click="currentStep = 0">上一步</el-button>
+      </div>
     </div>
 
     <!-- 步骤2: 配置映射 -->
-    <div v-if="currentStep === 1" class="step-content">
+    <div v-if="currentStep === 2" class="step-content">
       <div class="mapping-header">
         <h3>列映射配置</h3>
         <div class="template-actions">
@@ -89,6 +115,7 @@
                 {{ row.label }}
                 <span v-if="row.required" class="required-mark">*</span>
               </span>
+              <div v-if="row.description" class="field-desc">{{ row.description }}</div>
             </template>
           </el-table-column>
           <el-table-column label="Excel列" prop="excelColumn">
@@ -115,7 +142,7 @@
       </div>
 
       <div class="step-actions">
-        <el-button @click="currentStep = 0">上一步</el-button>
+        <el-button @click="currentStep = 1">上一步</el-button>
         <el-button type="primary" @click="handleNextStep" :disabled="!isMappingValid">
           下一步
         </el-button>
@@ -123,12 +150,14 @@
     </div>
 
     <!-- 步骤3: 执行导入 -->
-    <div v-if="currentStep === 2" class="step-content">
+    <div v-if="currentStep === 3" class="step-content">
       <div class="import-summary">
         <h3>导入确认</h3>
         <el-descriptions :column="3" border>
+          <el-descriptions-item label="导入类型">
+            <el-tag>{{ currentTypeLabel }}</el-tag>
+          </el-descriptions-item>
           <el-descriptions-item label="总行数">{{ uploadResult.totalRows }}</el-descriptions-item>
-          <el-descriptions-item label="Excel列数">{{ excelColumns.length }}</el-descriptions-item>
           <el-descriptions-item label="导入年份">
             <el-tag type="primary">{{ importYear }}</el-tag>
           </el-descriptions-item>
@@ -138,7 +167,7 @@
           <h4>映射配置</h4>
           <el-tag
             v-for="item in mappingTable.filter(m => m.excelColumn !== null && m.excelColumn !== undefined)"
-            :key="item.field"
+            :key="item.fieldName"
             class="mapping-tag"
           >
             {{ item.label }} → {{ excelColumns[item.excelColumn] }}
@@ -196,13 +225,24 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { UploadFilled, Document } from '@element-plus/icons-vue'
-import { uploadExcel, executeImport, getTemplateList } from '../../api/import'
+import {
+  uploadExcel,
+  executeImport,
+  getTemplateList,
+  saveTemplate as saveTemplateApi,
+  getImportTypes,
+  getFieldMetas
+} from '../../api/import'
 
 // 步骤控制
 const currentStep = ref(0)
+
+// 导入类型
+const importType = ref('')
+const importTypes = ref([])
 
 // 文件上传
 const uploadRef = ref()
@@ -227,42 +267,82 @@ const newTemplateName = ref('')
 const importing = ref(false)
 const importResult = ref(null)
 
-// 系统字段定义（不包含year，year改为手动输入）
-const systemFields = [
-  { field: 'department', label: '部门', required: true },
-  { field: 'positionName', label: '职位名称', required: true },
-  { field: 'majorRequired', label: '专业要求', required: false },
-  { field: 'educationRequired', label: '学历要求', required: false },
-  { field: 'politicalStatusRequired', label: '政治面貌要求', required: false },
-  { field: 'isFreshOnly', label: '是否限应届', required: false },
-  { field: 'recruitmentNumber', label: '招录人数', required: false },
-]
+// 动态字段列表（从后端获取）
+const systemFields = ref([])
 
 // 映射表格数据
-const mappingTable = ref(systemFields.map(f => ({
-  ...f,
-  excelColumn: null
-})))
+const mappingTable = ref([])
+
+// 当前类型的中文标签
+const currentTypeLabel = computed(() => {
+  const found = importTypes.value.find(t => t.code === importType.value)
+  return found ? found.label : ''
+})
 
 // 计算映射是否有效（需要检查必填字段和年份）
 const isMappingValid = computed(() => {
-  // 检查年份是否已填写
   if (!importYear.value) return false
-  
-  // 检查必填字段是否已映射
   const requiredFields = mappingTable.value.filter(m => m.required)
   return requiredFields.every(m => m.excelColumn !== null && m.excelColumn !== undefined)
 })
 
-// 加载模板列表
+// 加载导入类型列表
 onMounted(async () => {
   try {
-    const res = await getTemplateList()
-    templateList.value = res.data || []
+    const res = await getImportTypes()
+    importTypes.value = res.data || []
+    // 默认选第一个
+    if (importTypes.value.length > 0) {
+      importType.value = importTypes.value[0].code
+    }
   } catch (error) {
-    console.error('加载模板列表失败', error)
+    console.error('加载导入类型失败', error)
   }
 })
+
+// 切换类型时加载字段元数据和模板列表
+watch(importType, async (type) => {
+  if (!type) return
+  try {
+    // 加载字段
+    const fieldRes = await getFieldMetas(type)
+    systemFields.value = fieldRes.data || []
+    mappingTable.value = systemFields.value.map(f => ({
+      ...f,
+      excelColumn: null
+    }))
+    // 加载该类型的模板
+    const tplRes = await getTemplateList(type)
+    templateList.value = tplRes.data || []
+    selectedTemplateId.value = null
+  } catch (error) {
+    console.error('加载字段元数据失败', error)
+  }
+})
+
+// 确认类型后进入下一步
+const handleTypeConfirm = async () => {
+  if (!importType.value) {
+    ElMessage.warning('请选择导入类型')
+    return
+  }
+  // 确保字段已加载
+  if (systemFields.value.length === 0) {
+    try {
+      const fieldRes = await getFieldMetas(importType.value)
+      systemFields.value = fieldRes.data || []
+      mappingTable.value = systemFields.value.map(f => ({
+        ...f,
+        excelColumn: null
+      }))
+    } catch (e) {
+      console.error('加载字段配置失败', e)
+      ElMessage.error('加载字段配置失败')
+      return
+    }
+  }
+  currentStep.value = 1
+}
 
 // 文件选择
 const handleFileChange = (file) => {
@@ -282,7 +362,6 @@ const handleUpload = async () => {
     uploadResult.value = res.data
     excelColumns.value = res.data.columns || []
     previewData.value = (res.data.previewData || []).map(row => {
-      // 转换为数组格式
       if (Array.isArray(row)) return row
       return excelColumns.value.map((_, i) => row[i] || '')
     })
@@ -290,7 +369,7 @@ const handleUpload = async () => {
     // 自动匹配列名
     autoMatchColumns()
     
-    currentStep.value = 1
+    currentStep.value = 2
     ElMessage.success('文件解析成功')
   } catch (error) {
     console.error('上传失败', error)
@@ -304,10 +383,9 @@ const autoMatchColumns = () => {
   const columnLower = excelColumns.value.map(c => c.toLowerCase())
   
   mappingTable.value.forEach(item => {
-    const fieldLower = item.field.toLowerCase()
+    const fieldLower = item.fieldName.toLowerCase()
     const labelLower = item.label.toLowerCase()
     
-    // 尝试匹配字段名或标签名
     const index = columnLower.findIndex(c => 
       c.includes(fieldLower) || 
       c.includes(labelLower) ||
@@ -330,11 +408,10 @@ const applyTemplate = (templateId) => {
     try {
       const mapping = JSON.parse(template.columnMapping)
       mappingTable.value.forEach(item => {
-        if (mapping[item.field] !== undefined) {
-          item.excelColumn = mapping[item.field]
+        if (mapping[item.fieldName] !== undefined) {
+          item.excelColumn = mapping[item.fieldName]
         }
       })
-      // 应用年份（模板中单独保存的年份字段）
       if (template.year) {
         importYear.value = template.year
       }
@@ -346,35 +423,38 @@ const applyTemplate = (templateId) => {
 }
 
 // 保存模板
-const saveTemplate = () => {
+const saveTemplate = async () => {
   if (!newTemplateName.value.trim()) {
     ElMessage.warning('请输入模板名称')
     return
   }
-  
-  // 构建映射对象（不包含年份）
+
   const mapping = {}
   mappingTable.value.forEach(item => {
     if (item.excelColumn !== null && item.excelColumn !== undefined) {
-      mapping[item.field] = item.excelColumn
+      mapping[item.fieldName] = item.excelColumn
     }
   })
-  
-  // 这里需要调用后端保存模板，暂时用本地存储
-  const templates = JSON.parse(localStorage.getItem('importTemplates') || '[]')
-  templates.push({
-    id: Date.now(),
-    templateName: newTemplateName.value,
-    columnMapping: JSON.stringify(mapping),
-    year: importYear.value,
-    createTime: new Date().toISOString()
-  })
-  localStorage.setItem('importTemplates', JSON.stringify(templates))
-  
-  templateList.value = templates
-  showSaveTemplate.value = false
-  newTemplateName.value = ''
-  ElMessage.success('模板保存成功')
+
+  try {
+    await saveTemplateApi({
+      templateName: newTemplateName.value,
+      description: '',
+      columnMapping: JSON.stringify(mapping),
+      importType: importType.value
+    })
+
+    // 重新获取模板列表
+    const res = await getTemplateList(importType.value)
+    templateList.value = res.data || []
+
+    showSaveTemplate.value = false
+    newTemplateName.value = ''
+    ElMessage.success('模板保存成功')
+  } catch (error) {
+    console.error('保存模板失败', error)
+    ElMessage.error('保存模板失败')
+  }
 }
 
 // 下一步
@@ -387,16 +467,15 @@ const handleNextStep = () => {
     ElMessage.warning('请完成必填字段的映射')
     return
   }
-  currentStep.value = 2
+  currentStep.value = 3
 }
 
 // 执行导入
 const handleExecute = async () => {
-  // 构建映射对象（不包含年份，年份单独传递）
   const mapping = {}
   mappingTable.value.forEach(item => {
     if (item.excelColumn !== null && item.excelColumn !== undefined) {
-      mapping[item.field] = item.excelColumn
+      mapping[item.fieldName] = item.excelColumn
     }
   })
   
@@ -404,6 +483,7 @@ const handleExecute = async () => {
   try {
     const res = await executeImport({
       sessionId: uploadResult.value.sessionId,
+      importType: importType.value,
       mapping: mapping,
       year: importYear.value,
       saveAsTemplate: false
@@ -426,7 +506,7 @@ const resetImport = () => {
   previewData.value = []
   importResult.value = null
   importYear.value = new Date().getFullYear().toString()
-  mappingTable.value = systemFields.map(f => ({
+  mappingTable.value = systemFields.value.map(f => ({
     ...f,
     excelColumn: null
   }))
@@ -446,6 +526,20 @@ const resetImport = () => {
 
 .step-content {
   min-height: 400px;
+}
+
+.type-selection {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.type-selection h3 {
+  margin-bottom: 30px;
+  color: #303133;
+}
+
+.type-radio-group {
+  margin-bottom: 40px;
 }
 
 .upload-area {
@@ -516,6 +610,12 @@ const resetImport = () => {
 
 .mapping-section h4 {
   margin-bottom: 10px;
+}
+
+.field-desc {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 2px;
 }
 
 .required {

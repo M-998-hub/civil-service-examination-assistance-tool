@@ -25,3 +25,12 @@ export const filterPositions = (data) => {
     data
   })
 }
+
+// 获取报录比数据
+export const getPositionStats = (params) => {
+  return request({
+    url: '/position/stats',
+    method: 'get',
+    params
+  })
+}

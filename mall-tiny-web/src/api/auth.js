@@ -16,6 +16,22 @@ export const register = (data) => {
   })
 }
 
+export const sendVerifyCode = (data) => {
+  return request({
+    url: '/admin/forgot/send-code',
+    method: 'post',
+    data
+  })
+}
+
+export const resetPassword = (data) => {
+  return request({
+    url: '/admin/forgot/reset',
+    method: 'post',
+    data
+  })
+}
+
 export const getAdminInfo = () => {
   return request({
     url: '/admin/info',

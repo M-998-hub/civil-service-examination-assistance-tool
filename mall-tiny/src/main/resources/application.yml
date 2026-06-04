@@ -50,6 +50,7 @@ secure:
       - /druid/**
       - /admin/login
       - /admin/register
+      - /admin/forgot/**
       - /admin/info
       - /admin/logout
       - /admin/import/**

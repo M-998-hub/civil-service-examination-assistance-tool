@@ -7,6 +7,8 @@ import com.macro.mall.tiny.modules.ums.model.Position;
 import com.baomidou.mybatisplus.extension.service.IService;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
+
 /**
  * <p>
  * 岗位表 服务类
@@ -18,7 +20,7 @@ import org.springframework.web.multipart.MultipartFile;
 public interface PositionService extends IService<Position> {
 
     /**
-     * 根据条件筛选岗位
+     * 根据条件筛选岗位（自动过滤已删除）
      */
     Page<Position> filter(PositionFilterParam param);
 
@@ -26,4 +28,19 @@ public interface PositionService extends IService<Position> {
      * 导入 Excel 岗位数据
      */
     ImportResult importExcel(MultipartFile file) throws Exception;
+
+    /**
+     * 管理端分页查询（过滤 status=0）
+     */
+    Page<Position> adminPage(Integer pageNum, Integer pageSize, String department, Integer year);
+
+    /**
+     * 逻辑删除
+     */
+    boolean deleteById(Long id);
+
+    /**
+     * 批量逻辑删除
+     */
+    boolean batchDelete(List<Long> ids);
 }

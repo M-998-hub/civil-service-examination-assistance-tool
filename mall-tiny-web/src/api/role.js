@@ -33,3 +33,21 @@ export function assignResources(data) {
     data
   })
 }
+
+// 给用户分配角色
+export function grantRole(data) {
+  return request({
+    url: '/role/grant',
+    method: 'post',
+    data
+  })
+}
+
+// 撤销用户角色
+export function revokeUserRole(data) {
+  return request({
+    url: '/role/revoke',
+    method: 'delete',
+    data
+  })
+}

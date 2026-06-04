@@ -54,6 +54,9 @@ public class Position implements Serializable {
     @ApiModelProperty("年份")
     private Integer year;
 
+    @ApiModelProperty("状态：0=正常 1=已删除")
+    private Integer status;
+
     @ApiModelProperty("创建时间")
     private Date createTime;
 

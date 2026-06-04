@@ -1,11 +1,14 @@
 package com.macro.mall.tiny.modules.ums.controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.macro.mall.tiny.common.api.CommonPage;
 import com.macro.mall.tiny.common.api.CommonResult;
 import com.macro.mall.tiny.modules.ums.dto.PositionFilterParam;
 import com.macro.mall.tiny.modules.ums.model.Position;
+import com.macro.mall.tiny.modules.ums.model.PositionStats;
 import com.macro.mall.tiny.modules.ums.service.PositionService;
+import com.macro.mall.tiny.modules.ums.service.PositionStatsService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -27,6 +30,9 @@ public class PositionController {
 
     @Autowired
     private PositionService positionService;
+
+    @Autowired
+    private PositionStatsService positionStatsService;
 
     @ApiOperation(value = "添加Position")
     @RequestMapping(value = "/create", method = RequestMethod.POST)
@@ -86,5 +92,27 @@ public class PositionController {
     public CommonResult<Page<Position>> filter(@RequestBody PositionFilterParam param) {
         Page<Position> page = positionService.filter(param);
         return CommonResult.success(page);
+    }
+
+    @ApiOperation(value = "查询报录比数据")
+    @RequestMapping(value = "/stats", method = RequestMethod.GET)
+    @ResponseBody
+    public CommonResult<List<PositionStats>> getStats(
+            @RequestParam(required = false) String department,
+            @RequestParam(required = false) String positionName,
+            @RequestParam(required = false) Integer year) {
+        LambdaQueryWrapper<PositionStats> wrapper = new LambdaQueryWrapper<>();
+        if (department != null && !department.isEmpty()) {
+            wrapper.like(PositionStats::getDepartment, department);
+        }
+        if (positionName != null && !positionName.isEmpty()) {
+            wrapper.like(PositionStats::getPositionName, positionName);
+        }
+        if (year != null) {
+            wrapper.eq(PositionStats::getYear, year);
+        }
+        wrapper.orderByDesc(PositionStats::getYear);
+        List<PositionStats> list = positionStatsService.list(wrapper);
+        return CommonResult.success(list);
     }
 }

@@ -24,6 +24,13 @@ public class ImportTemplateServiceImpl extends ServiceImpl<ImportTemplateMapper,
     }
 
     @Override
+    public List<ImportTemplate> listByImportType(String importType) {
+        return list(new LambdaQueryWrapper<ImportTemplate>()
+                .eq(ImportTemplate::getImportType, importType)
+                .orderByDesc(ImportTemplate::getCreateTime));
+    }
+
+    @Override
     public ImportTemplate getByName(String templateName) {
         return getOne(new LambdaQueryWrapper<ImportTemplate>()
                 .eq(ImportTemplate::getTemplateName, templateName));

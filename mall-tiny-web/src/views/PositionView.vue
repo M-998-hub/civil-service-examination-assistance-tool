@@ -37,7 +37,25 @@
       </el-form>
     </el-card>
     <el-card class="table-card">
-      <el-table :data="positionList" style="width: 100%" v-loading="loading">
+      <div class="table-toolbar">
+        <el-button
+          type="warning"
+          :disabled="selectedRows.length < 2 || selectedRows.length > 3"
+          @click="handleCompare"
+        >
+          对比 ({{ selectedRows.length }}/3)
+        </el-button>
+        <span v-if="selectedRows.length > 3" class="selection-hint">最多选择 3 个岗位</span>
+      </div>
+      <el-table
+        ref="tableRef"
+        :data="positionList"
+        style="width: 100%"
+        v-loading="loading"
+        row-key="id"
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="45" :reserve-selection="true" />
         <el-table-column prop="positionName" label="岗位名称" min-width="150" />
         <el-table-column prop="department" label="部门" width="120" />
         <el-table-column prop="year" label="年份" width="80" />
@@ -45,11 +63,10 @@
         <el-table-column prop="politicalStatusRequired" label="政治面貌要求" width="120" />
         <el-table-column prop="majorRequired" label="专业要求" min-width="120" show-overflow-tooltip />
         <el-table-column prop="recruitmentNumber" label="招录人数" width="90" />
-        <el-table-column label="操作" width="100" fixed="right">
+        <el-table-column label="操作" width="140" fixed="right">
           <template #default="scope">
-            <el-button size="small" @click="handleFavorite(scope.row.id)">
-              收藏
-            </el-button>
+            <el-button size="small" type="primary" link @click="handleDetail(scope.row)">详情</el-button>
+            <el-button size="small" link @click="handleFavorite(scope.row.id)">收藏</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -65,6 +82,9 @@
         />
       </div>
     </el-card>
+
+    <PositionDetailDialog ref="detailDialogRef" />
+    <PositionCompareDialog ref="compareDialogRef" />
   </div>
 </template>
 
@@ -73,9 +93,15 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { filterPositions } from '../api/position'
 import { addFavorite } from '../api/favorite'
+import PositionDetailDialog from './PositionDetailDialog.vue'
+import PositionCompareDialog from './PositionCompareDialog.vue'
 
 const positionList = ref([])
 const loading = ref(false)
+const selectedRows = ref([])
+const tableRef = ref(null)
+const detailDialogRef = ref(null)
+const compareDialogRef = ref(null)
 
 const filterForm = reactive({
   year: null,
@@ -148,6 +174,33 @@ const handleFavorite = async (positionId) => {
   }
 }
 
+const handleDetail = (row) => {
+  detailDialogRef.value?.open(row.id)
+}
+
+const handleSelectionChange = (rows) => {
+  if (rows.length > 3) {
+    const trimmed = rows.slice(rows.length - 3)
+    tableRef.value?.clearSelection()
+    trimmed.forEach(r => tableRef.value?.toggleRowSelection(r, true))
+    selectedRows.value = trimmed
+  } else {
+    selectedRows.value = rows
+  }
+}
+
+const handleCompare = () => {
+  if (selectedRows.value.length < 2) {
+    ElMessage.warning('请至少选择 2 个岗位进行对比')
+    return
+  }
+  if (selectedRows.value.length > 3) {
+    ElMessage.warning('最多选择 3 个岗位进行对比')
+    return
+  }
+  compareDialogRef.value?.open(selectedRows.value)
+}
+
 onMounted(() => {
   loadPositions()
 })
@@ -181,5 +234,17 @@ h1 {
   margin-left: 8px;
   color: #909399;
   font-size: 12px;
+}
+
+.table-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.selection-hint {
+  color: #F56C6C;
+  font-size: 13px;
 }
 </style>

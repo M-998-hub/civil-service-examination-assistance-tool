@@ -13,6 +13,9 @@ import java.util.Date;
 @Getter
 @Setter
 public class FavoriteDto {
+    @ApiModelProperty("收藏ID")
+    private Long id;
+
     @ApiModelProperty("岗位ID")
     private Long positionId;
 

@@ -48,15 +48,17 @@ public class ImportPermissionInitializer implements ApplicationRunner {
         LOGGER.info("开始初始化导入权限资源...");
         
         // 创建导入权限资源
-        createResourceIfNotExists(1001L, "ums:import:upload", "/admin/import/upload", "Excel导入上传权限");
-        createResourceIfNotExists(1002L, "ums:import:execute", "/admin/import/execute", "Excel导入执行权限");
-        createResourceIfNotExists(1003L, "ums:import:template", "/admin/import/templates", "导入模板管理权限");
+        createResourceIfNotExists(1001L, "Excel导入上传", "/admin/import/upload", "Excel导入上传权限");
+        createResourceIfNotExists(1002L, "Excel导入执行", "/admin/import/execute", "Excel导入执行权限");
+        createResourceIfNotExists(1003L, "导入模板管理", "/admin/import/templates", "导入模板管理权限");
+        createResourceIfNotExists(1008L, "导入类型查询", "/admin/import/types", "获取支持的导入类型列表");
+        createResourceIfNotExists(1009L, "导入字段查询", "/admin/import/fields", "获取导入字段元数据");
         
         // 创建角色管理权限资源
-        createResourceIfNotExists(1004L, "ums:role:list", "/role/list", "角色列表查询权限");
-        createResourceIfNotExists(1005L, "ums:role:resource", "/role/resource/**", "角色资源查询权限");
-        createResourceIfNotExists(1006L, "ums:role:assign", "/role/resource/assign", "角色资源分配权限");
-        createResourceIfNotExists(1007L, "ums:resource:tree", "/resource/tree", "资源树查询权限");
+        createResourceIfNotExists(1004L, "角色列表查询", "/role/list", "角色列表查询权限");
+        createResourceIfNotExists(1005L, "角色资源查询", "/role/resource/**", "角色资源查询权限");
+        createResourceIfNotExists(1006L, "角色资源分配", "/role/resource/assign", "角色资源分配权限");
+        createResourceIfNotExists(1007L, "资源树查询", "/resource/tree", "资源树查询权限");
         
         // 将权限分配给管理员角色（角色ID=9）
         assignResourcesToAdminRole();
@@ -74,7 +76,7 @@ public class ImportPermissionInitializer implements ApplicationRunner {
      */
     private void assignResourcesToAdminRole() {
         Long adminRoleId = 9L; // 管理员角色ID为9
-        Long[] resourceIds = {1001L, 1002L, 1003L, 1004L, 1005L, 1006L, 1007L};
+        Long[] resourceIds = {1001L, 1002L, 1003L, 1004L, 1005L, 1006L, 1007L, 1008L, 1009L};
         
         for (Long resourceId : resourceIds) {
             // 检查是否已存在关系

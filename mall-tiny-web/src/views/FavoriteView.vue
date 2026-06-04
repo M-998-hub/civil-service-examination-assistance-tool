@@ -57,7 +57,7 @@ const loadFavorites = async () => {
       pageNum: pagination.pageNum,
       pageSize: pagination.pageSize
     })
-    favoriteList.value = res.data.records || []
+    favoriteList.value = res.data.list || []
     pagination.total = res.data.total || 0
   } catch (error) {
     console.error('获取收藏列表失败:', error)

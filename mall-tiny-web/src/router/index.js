@@ -14,7 +14,7 @@ const router = createRouter({
     },
     {
       path: '/',
-      redirect: '/archive',
+      redirect: '/home',
     },
     // 用户端路由
     {
@@ -22,6 +22,11 @@ const router = createRouter({
       component: LayoutView,
       meta: { requiresAuth: true },
       children: [
+        {
+          path: 'home',
+          name: 'Home',
+          component: () => import('../views/HomeView.vue'),
+        },
         {
           path: 'archive',
           name: 'Archive',
@@ -41,6 +46,11 @@ const router = createRouter({
           path: 'favorite',
           name: 'Favorite',
           component: () => import('../views/FavoriteView.vue'),
+        },
+        {
+          path: 'dashboard',
+          name: 'Dashboard',
+          component: () => import('../views/DashboardView.vue'),
         },
       ],
     },
@@ -78,6 +88,10 @@ const router = createRouter({
 router.beforeEach((to, from) => {
   const token = localStorage.getItem('token')
   const roles = JSON.parse(localStorage.getItem('roles') || '[]')
+  const resources = JSON.parse(localStorage.getItem('resources') || '[]')
+  
+  // 判断是否有管理端权限：拥有 /admin/** 资源URL即可
+  const hasAdminAccess = resources.some(url => url && url.startsWith('/admin'))
   
   // 需要登录的页面
   if (to.meta.requiresAuth && !token) {
@@ -86,17 +100,17 @@ router.beforeEach((to, from) => {
   
   // 需要管理员权限的页面
   if (to.meta.requiresAdmin) {
-    if (!roles.includes('管理员')) {
-      return '/archive'
+    if (!hasAdminAccess) {
+      return '/home'
     }
   }
   
   // 已登录用户访问登录页，跳转到对应首页
   if (to.path === '/login' && token) {
-    if (roles.includes('管理员')) {
+    if (hasAdminAccess) {
       return '/admin/import'
     } else {
-      return '/archive'
+      return '/home'
     }
   }
   

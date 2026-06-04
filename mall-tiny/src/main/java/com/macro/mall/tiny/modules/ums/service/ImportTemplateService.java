@@ -17,6 +17,11 @@ public interface ImportTemplateService extends IService<ImportTemplate> {
     List<ImportTemplate> listAll();
 
     /**
+     * 根据导入类型获取模板列表
+     */
+    List<ImportTemplate> listByImportType(String importType);
+
+    /**
      * 根据名称获取模板
      */
     ImportTemplate getByName(String templateName);

@@ -1,0 +1,48 @@
+{# templates/recommend_prompt.j2 #}
+{# 这是 Jinja2 注释，不会出现在最终输出中 #}
+
+# === System ===
+你是一名 {{ tech_domain }} 工程师，深度使用 {{ tech_stack }}，
+有 {{ experience }} 经验。
+
+代码风格遵循 {{ code_style | default('阿里巴巴 Java 开发手册') }}。
+
+# === User ===
+
+## 任务
+为 {{ project_name }} 实现 {{ feature }} 的【{{ code_layer }}】。
+
+## 已确定的技术选型（来自前期调研）
+{{ algorithm_desc }}
+
+## 上下文
+- 项目：{{ project_desc }}
+- 技术栈：{{ tech_stack_list }}
+- 已有：{{ existing_services }}
+{% if jdk_version %}
+- JDK版本：{{ jdk_version }}
+{% endif %}
+{% if database %}
+- 数据库：{{ database }}
+{% endif %}
+
+## 输出格式
+1. 【{{ interface_name }}】Java 代码块
+2. 【{{ impl_class }}】Java 代码块
+3. 【{{ util_class }}】Java 代码块
+4. 【{{ config_item }}】{{ config_format }}
+5. 【设计说明】关键决策的理由
+6. 【其他建议】可选，配置依赖或注意事项
+
+## 约束
+{% for constraint in constraints %}
+{{ loop.index }}. {{ constraint }}
+{% endfor %}
+
+## 注意项
+{% for note in special_notes %}
+{{ loop.index }}. {{ note }}
+{% endfor %}
+
+## 上下文不足时
+如果缺少必要信息，请先列出【需要确认的问题】，不要自行假设。

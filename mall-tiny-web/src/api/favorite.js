@@ -1,9 +1,9 @@
 import request from './request'
 
-// 获取收藏列表
+// 获取我的收藏列表（分页）
 export const getFavoriteList = (params) => {
   return request({
-    url: '/favorite/list',
+    url: '/favorite/my/page',
     method: 'get',
     params
   })
@@ -21,14 +21,14 @@ export const addFavorite = (positionId) => {
 export const removeFavorite = (positionId) => {
   return request({
     url: `/favorite/remove/${positionId}`,
-    method: 'delete'
+    method: 'post'
   })
 }
 
 // 检查是否已收藏
 export const checkFavorite = (positionId) => {
   return request({
-    url: `/favorite/check/${positionId}`,
+    url: `/favorite/isFavorite/${positionId}`,
     method: 'get'
   })
 }

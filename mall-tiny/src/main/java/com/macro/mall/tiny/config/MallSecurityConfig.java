@@ -38,14 +38,20 @@ public class MallSecurityConfig {
 
     @Bean
     public DynamicSecurityService dynamicSecurityService() {
+        //创建DynamicSecurityService接口的匿名实现类对象
         return new DynamicSecurityService() {
+            //实现接口中的方法，用于加载权限数据源
             @Override
             public Map<String, ConfigAttribute> loadDataSource() {
+                //创建线程安全的Map，存储URL -> 权限的映射关系
                 Map<String, ConfigAttribute> map = new ConcurrentHashMap<>();
+                //从数据库查询所有资源
                 List<UmsResource> resourceList = resourceService.list();
                 for (UmsResource resource : resourceList) {
+                    //将URL作为key，权限配置对象作为value存入Map
                     map.put(resource.getUrl(), new org.springframework.security.access.SecurityConfig(resource.getId() + ":" + resource.getName()));
                 }
+                //返回构建好的权限映射表
                 return map;
             }
         };

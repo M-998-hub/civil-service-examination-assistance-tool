@@ -1,5 +1,22 @@
 import request from './request'
 
+// 获取支持的导入类型列表
+export const getImportTypes = () => {
+  return request({
+    url: '/admin/import/types',
+    method: 'get'
+  })
+}
+
+// 获取指定导入类型的字段元数据
+export const getFieldMetas = (type) => {
+  return request({
+    url: '/admin/import/fields',
+    method: 'get',
+    params: { type }
+  })
+}
+
 // 上传Excel并预览
 export const uploadExcel = (file) => {
   const formData = new FormData()
@@ -23,11 +40,12 @@ export const executeImport = (data) => {
   })
 }
 
-// 获取模板列表
-export const getTemplateList = () => {
+// 获取模板列表（按类型过滤）
+export const getTemplateList = (importType) => {
   return request({
     url: '/admin/import/templates',
-    method: 'get'
+    method: 'get',
+    params: importType ? { importType } : {}
   })
 }
 
@@ -36,5 +54,14 @@ export const deleteTemplate = (id) => {
   return request({
     url: `/admin/import/template/${id}`,
     method: 'delete'
+  })
+}
+
+// 保存模板
+export const saveTemplate = (data) => {
+  return request({
+    url: '/admin/import/template',
+    method: 'post',
+    data
   })
 }

@@ -30,11 +30,14 @@ public class PositionStats implements Serializable {
     @TableId(value = "id", type = IdType.AUTO)
     private Long id;
 
-    @ApiModelProperty("岗位ID")
-    private Long positionId;
-
     @ApiModelProperty("年份")
     private Integer year;
+
+    @ApiModelProperty("招录部门")
+    private String department;
+
+    @ApiModelProperty("职位名称")
+    private String positionName;
 
     @ApiModelProperty("报名人数")
     private Integer registrationCount;
