@@ -8,9 +8,40 @@ export const login = (data) => {
   })
 }
 
+export const loginByCode = (data) => {
+  return request({
+    url: '/admin/login-by-code',
+    method: 'post',
+    data
+  })
+}
+
+export const getCaptcha = () => {
+  return request({
+    url: '/admin/captcha',
+    method: 'get'
+  })
+}
+
+export const sendLoginCode = (data) => {
+  return request({
+    url: '/admin/send-login-code',
+    method: 'post',
+    data
+  })
+}
+
 export const register = (data) => {
   return request({
     url: '/admin/register',
+    method: 'post',
+    data
+  })
+}
+
+export const sendRegisterCode = (data) => {
+  return request({
+    url: '/admin/register/send-code',
     method: 'post',
     data
   })
@@ -40,7 +71,6 @@ export const getAdminInfo = () => {
 }
 
 export const logout = () => {
-  // 前端清除token即可，后端无专门登出接口
   localStorage.removeItem('token')
   return Promise.resolve()
 }

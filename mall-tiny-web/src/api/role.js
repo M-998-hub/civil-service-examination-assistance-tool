@@ -43,6 +43,24 @@ export function grantRole(data) {
   })
 }
 
+
+// 更新角色
+export function updateRole(id, data) {
+  return request({
+    url: `/role/update/${id}`,
+    method: 'post',
+    data
+  })
+}
+
+// 删除角色
+export function deleteRole(id) {
+  return request({
+    url: `/role/delete/${id}`,
+    method: 'post'
+  })
+}
+
 // 撤销用户角色
 export function revokeUserRole(data) {
   return request({

@@ -28,6 +28,10 @@
             <el-icon><UserFilled /></el-icon>
             <span>角色管理</span>
           </el-menu-item>
+          <el-menu-item index="/admin/user">
+            <el-icon><User /></el-icon>
+            <span>用户管理</span>
+          </el-menu-item>
         </el-menu>
       </el-aside>
       <el-main class="admin-layout-main">
@@ -41,7 +45,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Upload, Document, UserFilled } from '@element-plus/icons-vue'
+import { Upload, Document, UserFilled, User } from '@element-plus/icons-vue'
 import { getAdminInfo, logout } from '../../api/auth'
 
 const router = useRouter()

@@ -79,6 +79,11 @@ const router = createRouter({
           name: 'AdminRole',
           component: () => import('../views/admin/AdminRoleView.vue'),
         },
+        {
+          path: 'user',
+          name: 'AdminUser',
+          component: () => import('../views/admin/AdminUserView.vue'),
+        },
       ],
     },
   ],

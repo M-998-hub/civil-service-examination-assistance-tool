@@ -125,6 +125,35 @@
       </el-row>
     </el-card>
 
+    <!-- AI 选岗助理 -->
+    <el-card class="section-card ai-card" shadow="never">
+      <template #header>
+        <div class="section-header">
+          <span class="section-title">AI 选岗助理</span>
+          <el-button link type="primary" size="small" @click="apiKeyDialog.open('view')">
+            <el-icon><Setting /></el-icon>
+          </el-button>
+        </div>
+      </template>
+      <div class="ai-input-row">
+        <el-input
+          v-model="aiQuestion"
+          placeholder="输入问题，例如：计算机专业硕士有什么推荐岗位？"
+          @keyup.enter="handleAiAsk"
+          :disabled="aiAsking"
+        />
+        <el-button type="primary" :loading="aiAsking" @click="handleAiAsk">发送</el-button>
+      </div>
+      <div v-if="aiAnswer" class="ai-answer">
+        <div class="ai-answer-header">
+          <el-icon color="#409EFF"><MagicStick /></el-icon>
+          <span>AI 回复</span>
+          <el-button link size="small" type="danger" @click="aiAnswer = ''">清除</el-button>
+        </div>
+        <div class="ai-answer-content">{{ aiAnswer }}</div>
+      </div>
+    </el-card>
+
     <!-- 档案摘要 -->
     <el-card class="section-card" shadow="never">
       <template #header>
@@ -173,17 +202,21 @@
       </el-empty>
     </el-card>
   </div>
+
+    <ApiKeyDialog ref="apiKeyDialog" />
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Document, Star, MagicStick, HomeFilled, Search, DataAnalysis } from '@element-plus/icons-vue'
+import { Document, Star, MagicStick, HomeFilled, Search, DataAnalysis, Setting } from '@element-plus/icons-vue'
 import { getAdminInfo } from '../api/auth'
 import { getMyArchive } from '../api/archive'
 import { filterPositions } from '../api/position'
 import { getFavoriteList } from '../api/favorite'
 import { recommend } from '../api/match'
+import { aiAsk, hasApiKey } from '../api/ai'
+import ApiKeyDialog from '../components/ApiKeyDialog.vue'
 
 const router = useRouter()
 
@@ -199,6 +232,11 @@ const archive = reactive({
 const positionTotal = ref(0)
 const favoriteTotal = ref(0)
 const matchTotal = ref('--')
+
+const apiKeyDialog = ref(null)
+const aiQuestion = ref('')
+const aiAsking = ref(false)
+const aiAnswer = ref('')
 
 const statsLoading = reactive({
   position: true,
@@ -359,6 +397,30 @@ const loadStats = async () => {
     matchTotal.value = '--'
   } finally {
     statsLoading.match = false
+  }
+}
+
+
+const handleAiAsk = async () => {
+  const q = aiQuestion.value.trim()
+  if (!q) return
+  if (!hasApiKey()) {
+    apiKeyDialog.value.open('config')
+    return
+  }
+  aiAsking.value = true
+  aiAnswer.value = ''
+  try {
+    const res = await aiAsk({ question: q })
+    aiAnswer.value = res.data?.answer || 'AI not return valid reply'
+  } catch (error) {
+    if (error.code === 'NO_API_KEY') {
+      apiKeyDialog.value.open('config')
+    } else {
+      ElMessage.error('AI not available，please retry later')
+    }
+  } finally {
+    aiAsking.value = false
   }
 }
 
@@ -553,4 +615,13 @@ onMounted(() => {
   color: #C0C4CC;
   font-size: 13px;
 }
+
+/* AI 助理卡片 */
+.ai-card { border: 1px solid #d9ecff; }
+.ai-input-row { display: flex; gap: 10px; }
+.ai-input-row .el-input { flex: 1; }
+.ai-answer { margin-top: 16px; }
+.ai-answer-header { display: flex; align-items: center; gap: 6px; font-size: 14px; color: #303133; margin-bottom: 8px; }
+.ai-answer-header .el-button { margin-left: auto; }
+.ai-answer-content { background: #f0f9ff; border-left: 3px solid #409EFF; padding: 12px 16px; border-radius: 4px; font-size: 14px; color: #303133; line-height: 1.8; white-space: pre-wrap; max-height: 300px; overflow-y: auto; }
 </style>

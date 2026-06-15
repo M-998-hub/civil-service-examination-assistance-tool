@@ -1,5 +1,7 @@
 package com.macro.mall.tiny.modules.ums.controller;
 
+import cn.hutool.captcha.CaptchaUtil;
+import cn.hutool.captcha.LineCaptcha;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.RandomUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
@@ -29,11 +31,9 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletRequest;
+import java.io.ByteArrayOutputStream;
 import java.security.Principal;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -42,7 +42,7 @@ import java.util.stream.Collectors;
  */
 @Controller
 @Api(tags = "UmsAdminController")
-@Tag(name = "UmsAdminController",description = "后台用户管理")
+@Tag(name = "UmsAdminController", description = "后台用户管理")
 @RequestMapping("/admin")
 public class UmsAdminController {
     private static final Logger LOGGER = LoggerFactory.getLogger(UmsAdminController.class);
@@ -59,6 +59,43 @@ public class UmsAdminController {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @ApiOperation(value = "获取图片验证码")
+    @RequestMapping(value = "/captcha", method = RequestMethod.GET)
+    @ResponseBody
+    public CommonResult getCaptcha() {
+        // 生成线段干扰验证码
+        LineCaptcha lineCaptcha = CaptchaUtil.createLineCaptcha(130, 48, 4, 20);
+        String uuid = UUID.randomUUID().toString();
+        String code = lineCaptcha.getCode();
+        // 存入 Redis，过期 5 分钟
+        String redisKey = "captcha:" + uuid;
+        redisService.set(redisKey, code, 5 * 60);
+        // 返回 Base64 图片
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        lineCaptcha.write(baos);
+        String imageBase64 = "data:image/png;base64," + Base64.getEncoder().encodeToString(baos.toByteArray());
+        Map<String, String> result = new HashMap<>();
+        result.put("uuid", uuid);
+        result.put("imageBase64", imageBase64);
+        return CommonResult.success(result);
+    }
+
+    @ApiOperation(value = "校验图片验证码")
+    private boolean validateCaptcha(String captchaUuid, String captchaCode) {
+        if (captchaUuid == null || captchaUuid.isEmpty() || captchaCode == null || captchaCode.isEmpty()) {
+            return false;
+        }
+        String redisKey = "captcha:" + captchaUuid;
+        String storedCode = (String) redisService.get(redisKey);
+        if (storedCode == null) {
+            return false;
+        }
+        boolean valid = storedCode.equalsIgnoreCase(captchaCode.trim());
+        // 校验后立即删除，防止重复使用
+        redisService.del(redisKey);
+        return valid;
+    }
+
     @ApiOperation(value = "用户注册")
     @RequestMapping(value = "/register", method = RequestMethod.POST)
     @ResponseBody
@@ -68,6 +105,9 @@ public class UmsAdminController {
         String confirmPassword = param.get("confirmPassword");
         String nickName = param.get("nickName");
         String email = param.get("email");
+        String captchaUuid = param.get("captchaUuid");
+        String captchaCode = param.get("captchaCode");
+        String emailCode = param.get("emailCode");
         // 校验参数
         if (username == null || username.trim().isEmpty() || password == null || password.trim().isEmpty()) {
             return CommonResult.validateFailed("用户名和密码不能为空");
@@ -75,6 +115,23 @@ public class UmsAdminController {
         if (!password.equals(confirmPassword)) {
             return CommonResult.failed(ResultCode.PASSWORD_CONFIRM_MISMATCH);
         }
+        // 校验图片验证码
+        if (!validateCaptcha(captchaUuid, captchaCode)) {
+            return CommonResult.validateFailed("图片验证码错误或已过期");
+        }
+        // 校验邮箱验证码
+        if (email == null || email.trim().isEmpty()) {
+            return CommonResult.validateFailed("邮箱不能为空");
+        }
+        if (emailCode == null || emailCode.trim().isEmpty()) {
+            return CommonResult.validateFailed("邮箱验证码不能为空");
+        }
+        String emailCodeKey = "register:code:" + email.trim();
+        String storedEmailCode = (String) redisService.get(emailCodeKey);
+        if (storedEmailCode == null || !storedEmailCode.equals(emailCode.trim())) {
+            return CommonResult.validateFailed("邮箱验证码错误或已过期");
+        }
+        redisService.del(emailCodeKey);
         // 检查用户名是否已存在
         UmsAdmin existingAdmin = adminService.getAdminByUsername(username.trim());
         if (existingAdmin != null) {
@@ -91,6 +148,30 @@ public class UmsAdminController {
             return CommonResult.failed("注册失败");
         }
         return CommonResult.success(null, "注册成功");
+    }
+
+    @ApiOperation(value = "注册-发送邮箱验证码")
+    @RequestMapping(value = "/register/send-code", method = RequestMethod.POST)
+    @ResponseBody
+    public CommonResult sendRegisterCode(@RequestBody Map<String, String> param) {
+        String email = param.get("email");
+        String captchaUuid = param.get("captchaUuid");
+        String captchaCode = param.get("captchaCode");
+        if (email == null || email.trim().isEmpty()) {
+            return CommonResult.validateFailed("邮箱不能为空");
+        }
+        // 校验图片验证码
+        if (!validateCaptcha(captchaUuid, captchaCode)) {
+            return CommonResult.validateFailed("图片验证码错误或已过期");
+        }
+        // 生成 6 位随机验证码
+        String code = RandomUtil.randomNumbers(6);
+        String redisKey = "register:code:" + email.trim();
+        redisService.set(redisKey, code, 5 * 60);
+        LOGGER.info("注册验证码已生成，邮箱: {}, 验证码: {}", email, code);
+        Map<String, String> result = new HashMap<>();
+        result.put("code", code);
+        return CommonResult.success(result, "验证码已发送");
     }
 
     @ApiOperation(value = "忘记密码-发送验证码")
@@ -112,12 +193,9 @@ public class UmsAdminController {
         String code = RandomUtil.randomNumbers(6);
         // 存入 Redis，过期 5 分钟
         String redisKey = "verify:code:" + email.trim();
-        redisService.set(redisKey, code, 300);
-        // 日志输出验证码（演示用，后续对接真实邮件服务）
-        LOGGER.info("【忘记密码】邮箱: {}, 验证码: {}", email.trim(), code);
-        Map<String, Object> result = new HashMap<>();
-        result.put("message", "验证码已发送");
-        // 演示模式：直接返回验证码（生产环境应删除）
+        redisService.set(redisKey, code, 5 * 60);
+        LOGGER.info("验证码已生成，邮箱: {}, 验证码: {}", email, code);
+        Map<String, String> result = new HashMap<>();
         result.put("code", code);
         return CommonResult.success(result);
     }
@@ -130,18 +208,23 @@ public class UmsAdminController {
         String code = param.get("code");
         String newPassword = param.get("newPassword");
         String confirmPassword = param.get("confirmPassword");
-        // 参数校验
-        if (email == null || code == null || newPassword == null || confirmPassword == null) {
-            return CommonResult.validateFailed("参数不完整");
+        if (email == null || email.trim().isEmpty()) {
+            return CommonResult.validateFailed("邮箱不能为空");
+        }
+        if (code == null || code.trim().isEmpty()) {
+            return CommonResult.validateFailed("验证码不能为空");
+        }
+        if (newPassword == null || newPassword.trim().isEmpty()) {
+            return CommonResult.validateFailed("新密码不能为空");
         }
         if (!newPassword.equals(confirmPassword)) {
             return CommonResult.failed(ResultCode.PASSWORD_CONFIRM_MISMATCH);
         }
         // 校验验证码
         String redisKey = "verify:code:" + email.trim();
-        Object storedCode = redisService.get(redisKey);
-        if (storedCode == null || !storedCode.toString().equals(code.trim())) {
-            return CommonResult.failed(ResultCode.VERIFY_CODE_INVALID);
+        String storedCode = (String) redisService.get(redisKey);
+        if (storedCode == null || !storedCode.equals(code.trim())) {
+            return CommonResult.validateFailed("验证码错误或已过期");
         }
         // 查找用户
         QueryWrapper<UmsAdmin> wrapper = new QueryWrapper<>();
@@ -152,12 +235,8 @@ public class UmsAdminController {
         }
         // 更新密码
         UmsAdmin admin = adminList.get(0);
-        UmsAdmin updateAdmin = new UmsAdmin();
-        updateAdmin.setId(admin.getId());
-        updateAdmin.setPassword(passwordEncoder.encode(newPassword));
-        adminService.updateById(updateAdmin);
-        // 清除用户缓存，确保下次登录使用新密码
-        adminService.getCacheService().delAdmin(admin.getId());
+        admin.setPassword(passwordEncoder.encode(newPassword));
+        adminService.updateById(admin);
         // 删除验证码
         redisService.del(redisKey);
         return CommonResult.success(null, "密码重置成功");
@@ -167,6 +246,10 @@ public class UmsAdminController {
     @RequestMapping(value = "/login", method = RequestMethod.POST)
     @ResponseBody
     public CommonResult login(@Validated @RequestBody UmsAdminLoginParam umsAdminLoginParam) {
+        // 校验图片验证码
+        if (!validateCaptcha(umsAdminLoginParam.getCaptchaUuid(), umsAdminLoginParam.getCaptchaCode())) {
+            return CommonResult.validateFailed("图片验证码错误或已过期");
+        }
         String token = adminService.login(umsAdminLoginParam.getUsername(), umsAdminLoginParam.getPassword());
         if (token == null) {
             return CommonResult.validateFailed("用户名或密码错误");
@@ -195,6 +278,96 @@ public class UmsAdminController {
         return CommonResult.success(tokenMap);
     }
 
+    @ApiOperation(value = "邮箱验证码登录")
+    @RequestMapping(value = "/login-by-code", method = RequestMethod.POST)
+    @ResponseBody
+    public CommonResult loginByCode(@RequestBody Map<String, String> param) {
+        String email = param.get("email");
+        String code = param.get("code");
+        if (email == null || email.trim().isEmpty()) {
+            return CommonResult.validateFailed("邮箱不能为空");
+        }
+        if (code == null || code.trim().isEmpty()) {
+            return CommonResult.validateFailed("验证码不能为空");
+        }
+        // 校验验证码
+        String redisKey = "verify:login:" + email.trim();
+        String storedCode = (String) redisService.get(redisKey);
+        if (storedCode == null || !storedCode.equals(code.trim())) {
+            return CommonResult.validateFailed("验证码错误或已过期");
+        }
+        redisService.del(redisKey);
+        // 根据邮箱查找用户
+        QueryWrapper<UmsAdmin> wrapper = new QueryWrapper<>();
+        wrapper.lambda().eq(UmsAdmin::getEmail, email.trim());
+        List<UmsAdmin> adminList = adminService.list(wrapper);
+        if (adminList == null || adminList.isEmpty()) {
+            return CommonResult.failed(ResultCode.EMAIL_NOT_FOUND);
+        }
+        UmsAdmin umsAdmin = adminList.get(0);
+        // 检查用户状态
+        if (umsAdmin.getStatus() != 1) {
+            return CommonResult.failed("帐号已被禁用");
+        }
+        // 加载用户详情并生成 token
+        org.springframework.security.core.userdetails.UserDetails userDetails =
+                adminService.loadUserByUsername(umsAdmin.getUsername());
+        com.macro.mall.tiny.security.util.JwtTokenUtil jwtTokenUtil =
+                com.macro.mall.tiny.security.util.SpringUtil.getBean(com.macro.mall.tiny.security.util.JwtTokenUtil.class);
+        String token = jwtTokenUtil.generateToken(userDetails);
+        if (token == null) {
+            return CommonResult.failed("登录失败，请检查用户状态");
+        }
+        Map<String, Object> tokenMap = new HashMap<>();
+        tokenMap.put("token", token);
+        tokenMap.put("tokenHead", tokenHead);
+        List<UmsRole> roleList = adminService.getRoleList(umsAdmin.getId());
+        if (CollUtil.isNotEmpty(roleList)) {
+            List<String> roles = roleList.stream().map(UmsRole::getName).collect(Collectors.toList());
+            tokenMap.put("roles", roles);
+        }
+        List<UmsResource> resourceList = adminService.getResourceList(umsAdmin.getId());
+        if (CollUtil.isNotEmpty(resourceList)) {
+            List<String> resources = resourceList.stream()
+                    .map(UmsResource::getUrl)
+                    .filter(url -> url != null && !url.isEmpty())
+                    .collect(Collectors.toList());
+            tokenMap.put("resources", resources);
+        }
+        return CommonResult.success(tokenMap);
+    }
+
+    @ApiOperation(value = "发送登录邮箱验证码")
+    @RequestMapping(value = "/send-login-code", method = RequestMethod.POST)
+    @ResponseBody
+    public CommonResult sendLoginCode(@RequestBody Map<String, String> param) {
+        String email = param.get("email");
+        String captchaUuid = param.get("captchaUuid");
+        String captchaCode = param.get("captchaCode");
+        if (email == null || email.trim().isEmpty()) {
+            return CommonResult.validateFailed("邮箱不能为空");
+        }
+        // 校验图片验证码
+        if (!validateCaptcha(captchaUuid, captchaCode)) {
+            return CommonResult.validateFailed("图片验证码错误或已过期");
+        }
+        // 检查邮箱是否绑定用户
+        QueryWrapper<UmsAdmin> wrapper = new QueryWrapper<>();
+        wrapper.lambda().eq(UmsAdmin::getEmail, email.trim());
+        List<UmsAdmin> adminList = adminService.list(wrapper);
+        if (adminList == null || adminList.isEmpty()) {
+            return CommonResult.failed(ResultCode.EMAIL_NOT_FOUND);
+        }
+        // 生成 6 位随机验证码
+        String code = RandomUtil.randomNumbers(6);
+        String redisKey = "verify:login:" + email.trim();
+        redisService.set(redisKey, code, 5 * 60);
+        LOGGER.info("登录验证码已生成，邮箱: {}, 验证码: {}", email, code);
+        Map<String, String> result = new HashMap<>();
+        result.put("code", code);
+        return CommonResult.success(result, "验证码已发送");
+    }
+
     @ApiOperation(value = "刷新token")
     @RequestMapping(value = "/refreshToken", method = RequestMethod.GET)
     @ResponseBody
@@ -214,12 +387,12 @@ public class UmsAdminController {
     @RequestMapping(value = "/info", method = RequestMethod.GET)
     @ResponseBody
     public CommonResult getAdminInfo(Principal principal) {
-        if(principal == null){
+        if (principal == null) {
             return CommonResult.unauthorized(null);
         }
         String username = principal.getName();
         UmsAdmin umsAdmin = adminService.getAdminByUsername(username);
-        if(umsAdmin == null){
+        if (umsAdmin == null) {
             return CommonResult.unauthorized(null);
         }
         Map<String, Object> data = new HashMap<>();
@@ -229,15 +402,13 @@ public class UmsAdminController {
             List<?> menuList = roleService.getMenuList(umsAdmin.getId());
             data.put("menus", menuList != null ? menuList : new ArrayList<>());
             List<UmsRole> roleList = adminService.getRoleList(umsAdmin.getId());
-            if(CollUtil.isNotEmpty(roleList)){
+            if (CollUtil.isNotEmpty(roleList)) {
                 List<String> roles = roleList.stream().map(UmsRole::getName).collect(Collectors.toList());
                 data.put("roles", roles);
             }
         } catch (Exception e) {
-            // 如果获取菜单或角色失败，返回基本信息
             data.put("menus", new ArrayList<>());
         }
-        // 查询用户资源权限URL列表
         List<UmsResource> resourceList = adminService.getResourceList(umsAdmin.getId());
         if (CollUtil.isNotEmpty(resourceList)) {
             List<String> resources = resourceList.stream()
@@ -317,10 +488,10 @@ public class UmsAdminController {
     @ApiOperation("修改帐号状态")
     @RequestMapping(value = "/updateStatus/{id}", method = RequestMethod.POST)
     @ResponseBody
-    public CommonResult updateStatus(@PathVariable Long id,@RequestParam(value = "status") Integer status) {
+    public CommonResult updateStatus(@PathVariable Long id, @RequestParam(value = "status") Integer status) {
         UmsAdmin umsAdmin = new UmsAdmin();
         umsAdmin.setStatus(status);
-        boolean success = adminService.update(id,umsAdmin);
+        boolean success = adminService.update(id, umsAdmin);
         if (success) {
             return CommonResult.success(null);
         }

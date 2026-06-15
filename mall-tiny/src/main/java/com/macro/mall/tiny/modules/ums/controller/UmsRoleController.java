@@ -13,6 +13,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -87,6 +88,29 @@ public class UmsRoleController {
         }
         int count = adminService.updateRole(param.getAdminId(), roleIds);
         if (count >= 0) {
+            return CommonResult.success(null);
+        }
+        return CommonResult.failed();
+    }
+
+    @ApiOperation(value = "更新角色")
+    @RequestMapping(value = "/update/{id}", method = RequestMethod.POST)
+    @ResponseBody
+    public CommonResult update(@PathVariable Long id, @RequestBody UmsRole role) {
+        role.setId(id);
+        boolean success = roleService.updateById(role);
+        if (success) {
+            return CommonResult.success(null);
+        }
+        return CommonResult.failed();
+    }
+
+    @ApiOperation(value = "删除角色")
+    @RequestMapping(value = "/delete/{id}", method = RequestMethod.POST)
+    @ResponseBody
+    public CommonResult delete(@PathVariable Long id) {
+        boolean success = roleService.delete(Collections.singletonList(id));
+        if (success) {
             return CommonResult.success(null);
         }
         return CommonResult.failed();

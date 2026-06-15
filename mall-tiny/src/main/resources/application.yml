@@ -53,4 +53,13 @@ secure:
       - /admin/forgot/**
       - /admin/info
       - /admin/logout
+      - /admin/captcha
+      - /admin/login-by-code
+      - /admin/register/send-code
+      - /admin/send-login-code
       - /admin/import/**
+      - /ai/**
+
+deepseek:
+  api-url: https://api.deepseek.com/chat/completions
+  model: deepseek-chat
