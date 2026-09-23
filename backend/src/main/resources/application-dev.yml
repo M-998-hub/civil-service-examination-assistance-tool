@@ -1,0 +1,23 @@
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/civil_service_assistance?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
+  redis:
+    host: ${REDIS_HOST:localhost} # Redis服务器地址
+    database: 0 # Redis数据库索引（默认为0）
+    port: 6379 # Redis服务器连接端口
+    password: ${REDIS_PASSWORD:}
+    timeout: 3000ms # 连接超时时间（毫秒）
+
+logging:
+  level:
+    root: info
+    com.m998.civilservice: debug
+
+verification:
+  # 仅用于本地联调；生产环境必须接入邮件服务并保持关闭。
+  expose-code: ${EXPOSE_VERIFICATION_CODE:true}
+
+jwt:
+  secret: ${JWT_SECRET:dev-only-secret-change-before-deployment}

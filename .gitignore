@@ -1,0 +1,26 @@
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.iml
+~$*
+
+# Backend outputs and runtime data
+backend/target/
+backend/logs/
+backend/temp/
+backend/output/
+backend/.qoder/
+
+# Frontend outputs
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+frontend/.eslintcache
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.local

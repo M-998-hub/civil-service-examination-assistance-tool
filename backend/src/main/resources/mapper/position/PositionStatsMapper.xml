@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.m998.civilservice.modules.position.mapper.PositionStatsMapper">
+
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.m998.civilservice.modules.position.model.PositionStats">
+        <id column="id" property="id" />
+        <result column="year" property="year" />
+        <result column="department" property="department" />
+        <result column="position_name" property="positionName" />
+        <result column="registration_count" property="registrationCount" />
+        <result column="min_entry_score" property="minEntryScore" />
+        <result column="max_entry_score" property="maxEntryScore" />
+        <result column="create_time" property="createTime" />
+        <result column="update_time" property="updateTime" />
+    </resultMap>
+
+</mapper>

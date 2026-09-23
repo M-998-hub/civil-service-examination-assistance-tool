@@ -1,0 +1,32 @@
+version: '3'
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: civil-service-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    ports:
+      - 6379:6379
+  api:
+    image: civil-service-assistance-api:1.0.0-SNAPSHOT
+    container_name: civil-service-api
+    depends_on:
+      - redis
+    ports:
+      - 8080:8080
+    environment:
+      - 'SPRING_PROFILES_ACTIVE=prod'
+      - 'DB_URL=${DB_URL}'
+      - 'DB_USERNAME=${DB_USERNAME}'
+      - 'DB_PASSWORD=${DB_PASSWORD}'
+      - 'JWT_SECRET=${JWT_SECRET}'
+      - 'REDIS_HOST=redis'
+      - 'REDIS_PASSWORD=${REDIS_PASSWORD:-}'
+    volumes:
+      - /etc/localtime:/etc/localtime
+      - api-logs:/var/logs
+
+volumes:
+  redis-data:
+  api-logs:
