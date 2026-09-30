@@ -10,6 +10,7 @@ import io.swagger.annotations.ApiOperation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -30,6 +31,7 @@ public class AdminPositionController {
     @ApiOperation(value = "管理端-分页获取岗位列表")
     @GetMapping("/page")
     @ResponseBody
+    @PreAuthorize("hasAuthority('岗位列表查询')")
     public CommonResult<CommonPage<Position>> adminPage(
             @RequestParam(value = "pageNum", defaultValue = "1") Integer pageNum,
             @RequestParam(value = "pageSize", defaultValue = "10") Integer pageSize,
@@ -42,6 +44,7 @@ public class AdminPositionController {
     @ApiOperation(value = "管理端-获取岗位详情")
     @GetMapping("/{id}")
     @ResponseBody
+    @PreAuthorize("hasAuthority('岗位管理操作')")
     public CommonResult<Position> adminGetItem(@PathVariable Long id) {
         Position position = positionService.getById(id);
         return CommonResult.success(position);
@@ -50,8 +53,10 @@ public class AdminPositionController {
     @ApiOperation(value = "管理端-新增岗位")
     @PostMapping("")
     @ResponseBody
+    @PreAuthorize("hasAuthority('岗位管理操作')")
     public CommonResult adminCreate(@RequestBody Position position) {
         position.setStatus(0);
+        position.setRecruitmentStatus("ACTIVE");
         boolean success = positionService.save(position);
         if (success) {
             return CommonResult.success(null);
@@ -62,6 +67,7 @@ public class AdminPositionController {
     @ApiOperation(value = "管理端-编辑岗位")
     @PutMapping("/{id}")
     @ResponseBody
+    @PreAuthorize("hasAuthority('岗位管理操作')")
     public CommonResult adminUpdate(@PathVariable Long id, @RequestBody Position position) {
         position.setId(id);
         boolean success = positionService.updateById(position);
@@ -74,6 +80,7 @@ public class AdminPositionController {
     @ApiOperation(value = "管理端-删除岗位")
     @DeleteMapping("/{id}")
     @ResponseBody
+    @PreAuthorize("hasAuthority('岗位管理操作')")
     public CommonResult adminDelete(@PathVariable Long id) {
         boolean success = positionService.deleteById(id);
         if (success) {
@@ -85,6 +92,7 @@ public class AdminPositionController {
     @ApiOperation(value = "管理端-批量删除岗位")
     @DeleteMapping("/batch")
     @ResponseBody
+    @PreAuthorize("hasAuthority('岗位管理操作')")
     public CommonResult adminBatchDelete(@RequestBody Map<String, List<Long>> param) {
         List<Long> ids = param.get("ids");
         boolean success = positionService.batchDelete(ids);

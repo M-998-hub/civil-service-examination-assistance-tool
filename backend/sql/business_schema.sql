@@ -25,12 +25,68 @@ CREATE TABLE IF NOT EXISTS `position` (
   `registration_deadline` datetime DEFAULT NULL COMMENT '报名截止时间',
   `year` int NOT NULL COMMENT '招录年份',
   `status` tinyint NOT NULL DEFAULT 0 COMMENT '0正常 1删除',
+  `source_type` varchar(30) DEFAULT NULL COMMENT 'MANUAL/NATIONAL_OFFICIAL',
+  `source_position_code` varchar(100) DEFAULT NULL COMMENT '官方职位代码',
+  `source_document_id` bigint DEFAULT NULL COMMENT '来源文档',
+  `recruitment_status` varchar(20) NOT NULL DEFAULT 'ACTIVE' COMMENT 'ACTIVE/WITHDRAWN',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_position_year` (`year`),
-  KEY `idx_position_department` (`department`)
+  KEY `idx_position_department` (`department`),
+  UNIQUE KEY `uk_position_source_code` (`year`, `source_type`, `source_position_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='岗位表';
+
+CREATE TABLE IF NOT EXISTS `ingestion_document` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `source_url` varchar(2048) NOT NULL,
+  `sha256` char(64) NOT NULL,
+  `file_path` varchar(1024) NOT NULL,
+  `fetched_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_ingestion_document_hash` (`sha256`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='官方原始文档归档';
+
+CREATE TABLE IF NOT EXISTS `ingestion_run` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `year` int NOT NULL,
+  `source_url` varchar(2048) DEFAULT NULL,
+  `document_id` bigint DEFAULT NULL,
+  `state` varchar(30) NOT NULL,
+  `message` varchar(1000) DEFAULT NULL,
+  `candidate_count` int NOT NULL DEFAULT 0,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `finished_at` datetime DEFAULT NULL,
+  `reviewed_by` bigint DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_ingestion_run_created` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='自动采集批次';
+
+CREATE TABLE IF NOT EXISTS `ingestion_candidate` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `run_id` bigint NOT NULL,
+  `position_code` varchar(100) NOT NULL,
+  `change_type` varchar(20) NOT NULL,
+  `state` varchar(20) NOT NULL DEFAULT 'PENDING',
+  `data_json` text NOT NULL,
+  `previous_json` text DEFAULT NULL,
+  `validation_error` varchar(1000) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_ingestion_candidate_code` (`run_id`, `position_code`),
+  KEY `idx_ingestion_candidate_run` (`run_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='待审核岗位差异';
+
+CREATE TABLE IF NOT EXISTS `position_revision` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `position_id` bigint NOT NULL,
+  `run_id` bigint NOT NULL,
+  `change_type` varchar(20) NOT NULL,
+  `before_json` text DEFAULT NULL,
+  `after_json` text DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_position_revision_position` (`position_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='岗位发布修订记录';
 
 CREATE TABLE IF NOT EXISTS `position_stats` (
   `id` bigint NOT NULL AUTO_INCREMENT,

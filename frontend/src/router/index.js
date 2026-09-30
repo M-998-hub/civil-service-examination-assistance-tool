@@ -70,6 +70,11 @@ const router = createRouter({
           component: () => import('../views/admin/AdminImportView.vue'),
         },
         {
+          path: 'ingestion',
+          name: 'AdminIngestion',
+          component: () => import('../views/admin/AdminIngestionView.vue'),
+        },
+        {
           path: 'position',
           name: 'AdminPosition',
           component: () => import('../views/admin/AdminPositionView.vue'),

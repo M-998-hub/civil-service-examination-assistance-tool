@@ -63,3 +63,14 @@ secure:
 deepseek:
   api-url: https://api.deepseek.com/chat/completions
   model: deepseek-chat
+
+ingestion:
+  national:
+    enabled: ${NATIONAL_INGESTION_ENABLED:false}
+    year: ${NATIONAL_EXAM_YEAR:2026}
+    seed-url: ${NATIONAL_EXAM_SOURCE_URL:https://bm.scs.gov.cn/kl2026}
+    allowed-hosts: ${NATIONAL_SOURCE_HOSTS:bm.scs.gov.cn,scs.gov.cn,www.scs.gov.cn}
+    archive-dir: ${NATIONAL_ARCHIVE_DIR:./data/official-archives}
+    cron: ${NATIONAL_INGESTION_CRON:0 30 3 * * *}
+  ai:
+    api-key: ${INGESTION_AI_API_KEY:}

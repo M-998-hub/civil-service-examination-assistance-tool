@@ -34,7 +34,9 @@ public class MatchServiceImpl implements MatchService {
                 userArchive.getMajor(), userArchive.getEducation(),
                 userArchive.getPoliticalStatus(), userArchive.getIsFreshGraduate());
 
-        List<Position> allPositions = positionService.list(new LambdaQueryWrapper<>());
+        List<Position> allPositions = positionService.list(new LambdaQueryWrapper<Position>()
+                .eq(Position::getStatus, 0)
+                .eq(Position::getRecruitmentStatus, "ACTIVE"));
         LOGGER.info("total positions: {}", allPositions.size());
 
         return matchEngine.recommend(userArchive, allPositions);

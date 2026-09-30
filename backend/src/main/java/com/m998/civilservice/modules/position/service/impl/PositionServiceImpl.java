@@ -41,6 +41,7 @@ public class PositionServiceImpl extends ServiceImpl<PositionMapper, Position> i
         
         // 只查询未删除的
         wrapper.eq(Position::getStatus, 0);
+        wrapper.eq(Position::getRecruitmentStatus, "ACTIVE");
         
         // 年份筛选
         if (param.getYear() != null) {

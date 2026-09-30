@@ -56,6 +56,14 @@ public class Position implements Serializable {
     @ApiModelProperty("状态：0=正常 1=已删除")
     private Integer status;
 
+    private String sourceType;
+
+    private String sourcePositionCode;
+
+    private Long sourceDocumentId;
+
+    private String recruitmentStatus;
+
     @ApiModelProperty("创建时间")
     private Date createTime;
 

@@ -11,6 +11,7 @@ backend/target/
 backend/logs/
 backend/temp/
 backend/output/
+backend/data/
 backend/.qoder/
 
 # Frontend outputs

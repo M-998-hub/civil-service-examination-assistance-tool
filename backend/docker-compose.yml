@@ -23,10 +23,18 @@ services:
       - 'JWT_SECRET=${JWT_SECRET}'
       - 'REDIS_HOST=redis'
       - 'REDIS_PASSWORD=${REDIS_PASSWORD:-}'
+      - 'NATIONAL_INGESTION_ENABLED=${NATIONAL_INGESTION_ENABLED:-false}'
+      - 'NATIONAL_EXAM_YEAR=${NATIONAL_EXAM_YEAR:-2026}'
+      - 'NATIONAL_EXAM_SOURCE_URL=${NATIONAL_EXAM_SOURCE_URL:-https://bm.scs.gov.cn/kl2026}'
+      - 'NATIONAL_SOURCE_HOSTS=${NATIONAL_SOURCE_HOSTS:-bm.scs.gov.cn,scs.gov.cn,www.scs.gov.cn}'
+      - 'NATIONAL_ARCHIVE_DIR=/data/official-archives'
+      - 'INGESTION_AI_API_KEY=${INGESTION_AI_API_KEY:-}'
     volumes:
       - /etc/localtime:/etc/localtime
       - api-logs:/var/logs
+      - official-archives:/data/official-archives
 
 volumes:
   redis-data:
   api-logs:
+  official-archives:

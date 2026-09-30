@@ -16,6 +16,10 @@
             <el-icon><Upload /></el-icon>
             <span>数据导入</span>
           </el-menu-item>
+          <el-menu-item index="/admin/ingestion">
+            <el-icon><Download /></el-icon>
+            <span>官方自动采集</span>
+          </el-menu-item>
           <el-menu-item index="/admin/position">
             <el-icon><Document /></el-icon>
             <span>岗位管理</span>
@@ -41,7 +45,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Upload, Document, UserFilled, User } from '@element-plus/icons-vue'
+import { Upload, Download, Document, UserFilled, User } from '@element-plus/icons-vue'
 import { getAdminInfo, logout } from '../../api/auth'
 
 const router = useRouter()

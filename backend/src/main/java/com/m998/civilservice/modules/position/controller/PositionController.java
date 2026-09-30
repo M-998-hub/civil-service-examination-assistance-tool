@@ -14,6 +14,7 @@ import io.swagger.annotations.ApiOperation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -36,7 +37,10 @@ public class PositionController {
     @ApiOperation(value = "添加Position")
     @RequestMapping(value = "/create", method = RequestMethod.POST)
     @ResponseBody
+    @PreAuthorize("hasAuthority('岗位管理操作')")
     public CommonResult create(@RequestBody Position position) {
+        position.setStatus(0);
+        position.setRecruitmentStatus("ACTIVE");
         boolean success = positionService.save(position);
         if (success) {
             return CommonResult.success(null);
@@ -47,6 +51,7 @@ public class PositionController {
     @ApiOperation(value = "修改Position")
     @RequestMapping(value = "/update/{id}", method = RequestMethod.POST)
     @ResponseBody
+    @PreAuthorize("hasAuthority('岗位管理操作')")
     public CommonResult update(@PathVariable Long id, @RequestBody Position position) {
         position.setId(id);
         boolean success = positionService.updateById(position);
@@ -59,8 +64,9 @@ public class PositionController {
     @ApiOperation(value = "删除Position")
     @RequestMapping(value = "/delete/{id}", method = RequestMethod.POST)
     @ResponseBody
+    @PreAuthorize("hasAuthority('岗位管理操作')")
     public CommonResult delete(@PathVariable Long id) {
-        boolean success = positionService.removeById(id);
+        boolean success = positionService.deleteById(id);
         if (success) {
             return CommonResult.success(null);
         }
@@ -72,6 +78,9 @@ public class PositionController {
     @ResponseBody
     public CommonResult<Position> getItem(@PathVariable Long id) {
         Position position = positionService.getById(id);
+        if (position == null || !Integer.valueOf(0).equals(position.getStatus())) {
+            return CommonResult.failed("岗位不存在");
+        }
         return CommonResult.success(position);
     }
 
@@ -81,7 +90,9 @@ public class PositionController {
     public CommonResult<CommonPage<Position>> list(
             @RequestParam(value = "pageSize", defaultValue = "5") Integer pageSize,
             @RequestParam(value = "pageNum", defaultValue = "1") Integer pageNum) {
-        Page<Position> page = positionService.page(new Page<>(pageNum, pageSize));
+        Page<Position> page = positionService.page(new Page<>(pageNum, pageSize),
+                new LambdaQueryWrapper<Position>().eq(Position::getStatus, 0)
+                        .eq(Position::getRecruitmentStatus, "ACTIVE"));
         return CommonResult.success(CommonPage.restPage(page));
     }
 

@@ -3,6 +3,7 @@ package com.m998.civilservice.modules.importdata.component;
 import com.m998.civilservice.modules.auth.model.UmsResource;
 import com.m998.civilservice.modules.auth.model.UmsResourceCategory;
 import com.m998.civilservice.modules.auth.model.UmsRoleResourceRelation;
+import com.m998.civilservice.modules.auth.model.UmsRole;
 import com.m998.civilservice.modules.auth.service.UmsAdminCacheService;
 import com.m998.civilservice.modules.auth.service.UmsResourceCategoryService;
 import com.m998.civilservice.modules.auth.service.UmsResourceService;
@@ -79,6 +80,7 @@ public class ImportPermissionInitializer implements ApplicationRunner {
         
         // 将权限分配给管理员角色（角色ID=9）
         assignResourcesToAdminRole();
+        assignIngestionResources();
         
         // 清除并重新加载权限数据源
         dynamicSecurityMetadataSource.clearDataSource();
@@ -86,6 +88,49 @@ public class ImportPermissionInitializer implements ApplicationRunner {
         LOGGER.info("权限数据源已重新加载");
         
         LOGGER.info("权限资源初始化完成");
+    }
+
+    private void assignIngestionResources() {
+        Long[] resourceIds = {
+                1016L,
+                1017L,
+                ensureIngestionResource("官方数据采集", "/admin/ingestion/**", "发现官方来源并预览差异"),
+                ensureIngestionResource("官方数据发布", "/admin/ingestion/runs/*/publish", "审核发布官方岗位"),
+                ensureIngestionResource("官方数据驳回", "/admin/ingestion/runs/*/reject", "驳回采集批次")
+        };
+        List<UmsRole> administrators = roleService.lambdaQuery().in(UmsRole::getName, "管理员", "超级管理员").list();
+        for (UmsRole role : administrators) {
+            for (Long resourceId : resourceIds) {
+                boolean exists = roleResourceRelationService.lambdaQuery()
+                        .eq(UmsRoleResourceRelation::getRoleId, role.getId())
+                        .eq(UmsRoleResourceRelation::getResourceId, resourceId).count() > 0;
+                if (!exists) {
+                    UmsRoleResourceRelation relation = new UmsRoleResourceRelation();
+                    relation.setRoleId(role.getId());
+                    relation.setResourceId(resourceId);
+                    roleResourceRelationService.save(relation);
+                }
+            }
+            cacheService.delResourceListByRole(role.getId());
+        }
+    }
+
+    private Long ensureIngestionResource(String name, String url, String description) {
+        UmsResource resource = resourceService.lambdaQuery().eq(UmsResource::getUrl, url).one();
+        if (resource == null) {
+            resource = new UmsResource();
+            resource.setName(name);
+            resource.setUrl(url);
+            resource.setDescription(description);
+            resource.setCategoryId(1L);
+            resource.setCreateTime(new Date());
+            resourceService.save(resource);
+        } else if (!name.equals(resource.getName())) {
+            resource.setName(name);
+            resource.setDescription(description);
+            resourceService.updateById(resource);
+        }
+        return resource.getId();
     }
     
     /**
